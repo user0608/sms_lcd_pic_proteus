@@ -1,0 +1,7 @@
+*.O
+*.HEX
+*.LST
+*.ASM
+*.MAC
+.*swp
+

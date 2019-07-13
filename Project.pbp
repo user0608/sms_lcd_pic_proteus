@@ -1,0 +1,292 @@
+define OSC 4   
+
+DEFINE LCD_DREG PORTB 
+DEFINE LCD_DBIT 4     
+DEFINE LCD_RSREG PORTB
+DEFINE LCD_RSBIT 2    
+DEFINE LCD_EREG PORTB 
+DEFINE LCD_EBIT 3     
+DEFINE LCD_BITS 4     
+DEFINE LCD_LINES 2 
+DEFINE LCD_COMMANDUS 2000
+DEFINE LCD_DATAUS 50 
+
+TRISC =%11110000
+LCDOUT $FE,$01   
+ON INTERRUPT GOTO INTERRUPTION
+INTCON =%10010000
+
+KEYB VAR BYTE[64]
+PUNT VAR BYTE
+
+D_E VAR BYTE[6]
+
+'''''''''''''''''''''''''''''''
+'DECLARACION DE DATOS Y BARIABLES NECESARIAS 
+'PARA EL CONTROL DE LA EEPRON
+I VAR BYTE  
+J var byte      
+K var byte   
+
+read 250,d_e[0]
+read 251,d_e[1]
+read 252,d_e[2]
+read 253,d_e[3]
+read 254,d_e[4]
+read 255,d_e[5]
+'''''''''''''''''''''''''''''''
+
+L_SMS VAR BYTE[4]
+L_SMS[0]=128
+L_SMS[1]=192
+L_SMS[2]=137
+L_SMS[3]=201 
+
+POS VAR BYTE
+POS=0 
+EPOS VAR BYTE
+
+_char var byte
+_char=255
+c var bit
+c_char var word
+char VAR byte
+char=255
+auxChar VAR byte
+char=255
+
+MENU VAR BIT
+SHOW VAR BIT
+SMS VAR BIT
+auxSMS var bit
+DELETE VAR BIT
+EDIT VAR BIT
+ADD VAR BIT
+SAVE VAR BIT
+ADD=1
+ C_CHAR=0 
+'''''
+'MENU=1
+MENU=0
+INICIO:      
+    IF MENU =1 THEN GOSUB _MENU   
+    if ADD=1 THEN            
+      gosub _text                   
+    ENDIF 
+    IF SMS=1   THEN ' MUESTRA MENSAJE POR PANTALLA         
+       gosub _MS_M
+    ENDIF     
+    IF DELETE=1 THEN 
+        IF POS<>0 THEN
+             gosub _DELETE
+             LCDOUT $FE,1                                   
+        ELSE                                                                 
+            GOSUB _SHOW            
+        ENDIF        
+    ENDIF                       
+    PORTC=15
+     gosub _SAVE_EP
+GOTO INICIO  
+
+_TEXT:       
+    if c_char<10 then
+         IF CHAR<>0 THEN  
+            IF auxchar=char then  
+                _char=CHAR+K               
+                 K=K+1
+                 IF K=4 THEN K=0 
+                   lcdout $FE,128+9
+                   LCDOUT "k:",DEC K             
+            ELSE 
+                _CHAR=CHAR 
+                 K=0   
+                 lcdout $FE,128+9
+                 LCDOUT "k=",DEC K                           
+            endif 
+             auxchar=char                      
+     ENDIF         
+        
+         lcdout $FE,128+13
+         LCDOUT DEC C_CHAR         
+         CHAR=0
+         lcdout $FE,128
+         LCDOUT _CHAR                      
+    endif
+    IF C_CHAR<11 THEN 
+        C_CHAR=C_CHAR+1
+    ELSE
+        AUXCHAR=0
+    ENDIF
+RETURN
+
+_MENU:  ' MENU PRINCIPAL 
+    LCDOUT $FE,128
+     LCDOUT "1.SHOW"
+     LCDOUT $FE,192
+     LCDOUT "2.EDIT"
+     LCDOUT $FE,136
+     LCDOUT "3.DELETE"
+     LCDOUT $FE,200     
+     LCDOUT "4.ADD"
+     IF CHAR="1" THEN 
+                   LCDOUT $FE,207
+                   LCDOUT CHAR
+                   pause 200
+            MENU=0
+            SMS=1
+            char=0            
+         LCDOUT $FE,1   
+     ENDIF
+           IF CHAR="3" THEN 
+                   LCDOUT $FE,207
+                   LCDOUT CHAR
+                   pause 200
+            MENU=0
+            DELETE=1
+            pos=0
+            char=0
+         LCDOUT $FE,1 
+     ENDIF            
+RETURN
+_LAST:    'DEBUELBE IN J EL NUMERO DE NODOS
+    J=0
+    FOR I=0 TO 5 STEP 2
+        IF D_E[I]=1 THEN
+            LCDOUT $FE,l_sms[j] 
+            LCDOUT dec j+1,"->SMS",dec i/2+1
+            J=J+1
+        endif
+    NEXT I
+RETURN
+ _MS_M:
+            IF POS <>0 THEN 
+            IF auxsms=0 THEN LCDOUT $FE,1                       
+                SELECT CASE char                
+                  CASE "6" 
+                        LCDOUT $FE,$18 
+                        char=0
+                  CASE "5" 
+                        LCDOUT $FE,$2
+                        char=0
+                  CASE "4" 
+                        LCDOUT $FE,$1C
+                        char=0  
+                END SELECT            
+            GOSUB _SMS 
+            if char="*" then 
+                   LCDOUT $FE,1                                                                                     
+                   POS=0                                              
+                   auxsms=0
+                   char=0 
+            endif
+            
+        ELSE                                                       
+            GOSUB _SHOW
+        ENDIF
+RETURN
+_SMS:  ''MUESTRA MENSAJE SELECCIONADO, VARIABLE [POS]
+    if auxsms=0 then     
+         GOSUB _POS_N
+        FOR J=0 TO 63
+            READ d_e[i-1]+J,CHAR
+            IF J < 40  THEN LCDOUT $FE,128+J           
+            IF J> 39 THEN LCDOUT $FE,128+23+J                         
+            LCDOUT CHAR
+        NEXT J
+        auxsms=1                 
+    endif  
+    GOSUB HOME           
+RETURN
+
+_SHOW: 'LISTA LOS MENSAJES EN MEMORIA Y DEVUELBE [POS] 
+     GOSUB _LAST
+     if char="1" and j>0 then
+        pos=1 
+     endif
+     if char="2" and j>1 then
+        pos=2                 
+     endif
+     if char="3" and j>2 then
+        pos=3        
+     endif
+     if char="4" and j>3 then
+        pos=4                       
+     endif
+       GOSUB HOME             
+     char=0
+RETURN
+HOME:
+     IF CHAR = "0" THEN                     
+            MENU=1
+            sms =0
+            POS=0
+            delete=0
+            char=0
+            auxsms=0          
+            LCDOUT $FE,1
+     ENDIF 
+RETURN
+
+_POS_N:
+    i=0
+    j=0    
+    WHILE J<>POS
+        if d_e[i]=1 then 
+            j=j+1
+        endif
+       i=i+2 
+    WEND     
+RETURN
+_DELETE:
+    POS=(POS-1)*2
+    d_e[POS]=0
+    pos=0
+RETURN
+_SAVE_EP:      
+        write 250,d_e[0]
+        write 251,d_e[1]
+        write 252,d_e[2]
+        write 253,d_e[3]
+        write 254,d_e[4]
+        write 255,d_e[5]
+RETURN
+
+'TECLADO:    
+'    LCDOUT $FE,128+Pos      
+'    if char<>255 then 
+'        LCDOUT char      
+'        pos=pos+1
+'        char=255        
+'    endif
+'RETURN 
+
+DISABLE 
+INTERRUPTION: 
+        INTCON.1=0
+        PORTC=4
+        PAUSE 1
+        PORTC=1
+        PAUSE 1
+              IF PORTC.4=1 THEN char = "A"
+              IF PORTC.5=1 THEN char = "D"
+              IF PORTC.6=1 THEN char = "G"            
+        PORTC=2
+        PAUSE 10
+              IF PORTC.4=1 THEN char = "4"
+              IF PORTC.5=1 THEN char = "5"
+              IF PORTC.6=1 THEN char = "6"
+        PORTC=4
+        PAUSE 1
+              IF PORTC.4=1 THEN char = "7"
+              IF PORTC.5=1 THEN char = "8"
+              IF PORTC.6=1 THEN char = "9"
+        PORTC=8
+        PAUSE 1
+              IF PORTC.4=1 THEN char = "*"
+              IF PORTC.5=1 THEN char = "0"
+              IF PORTC.6=1 THEN char = "#"       
+        PAUSE 50
+        C_CHAR=0
+        PORTC=0
+RESUME
+ENABLE 
