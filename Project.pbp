@@ -22,8 +22,8 @@ PUNT VAR BYTE
 D_E VAR BYTE[6]
 b var bit
 '''''''''''''''''''''''''''''''
-'DECLARACION DE DATOS Y BARIABLES NECESARIAS 
-'PARA EL CONTROL DE LA EEPRON
+'DATA DECLARATION AND VARIABLES NECESSARY
+'FOR EEPROM CONTROL
 I VAR BYTE  
 J var byte      
 K var byte   
@@ -47,6 +47,7 @@ POS VAR BYTE
 POS=0 
 EPOS VAR BYTE
 p var byte
+q var bit
 
 _char var byte
 _char=255
@@ -67,7 +68,7 @@ EDIT VAR BIT
 ADD VAR BIT
 SAVE VAR BIT
 ADD=0
-
+ LCDOUT $FE,$0C
 '''''
 'MENU=1
 MENU=1
@@ -79,24 +80,53 @@ INICIO:
       else         
         lcdout $FE,128         
         LCDOUT "MEMORY IS FULL"
+        if char= "0" then gosub HOME
       endif
     ENDIF 
-    IF SMS=1   THEN ' MUESTRA MENSAJE POR PANTALLA         
+    
+    IF SMS=1   THEN ' SHOW SMS FOR SCREEN    
        gosub _MS_M
-    ENDIF     
+    ENDIF 
+        
     IF DELETE=1 THEN 
         IF POS<>0 THEN
              gosub _DELETE
-             LCDOUT $FE,1                                   
+             LCDOUT $FE,1                                                
         ELSE                                                                 
             GOSUB _SHOW            
         ENDIF        
-    ENDIF                       
+    ENDIF 
+                          
+     IF EDIT=1 THEN 
+        IF POS<>0 THEN 
+            if q =1 then 
+                 EPOS=(POS-1)*2
+                 gosub _SET_P
+                 LCDOUT $FE,1
+                 gosub _SMS            
+                 q=0        
+                   LCDOUT $FE, $0F                            
+                 char=0
+            endif             
+            gosub _TEXT                                             
+            char=0
+        ELSE                                                                 
+            GOSUB _SHOW            
+        ENDIF
+    ENDIF 
     PORTC=15
      gosub _SAVE_EP
 GOTO INICIO  
-
-_TEXT:   
+_SET_P:
+    p=0
+    FOR i=0 TO 64
+         READ d_e[ePOS+1]+P,CHAR   
+         p=p+1
+        IF CHAR=35 then i=65
+    NEXT i
+RETURN
+       
+_TEXT:  'RESEIVE P= MEMORY POINTER ,EPOS = D_E SECTOR
     if char="#" then 
         lcdout $FE,1        
         d_e[epos]=1
@@ -109,12 +139,18 @@ _TEXT:
         c=0
         _char=0                         
     endif
-    IF CHAR="1" THEN     
-         'p=p-1 
+    IF char="1" THEN     
          b=1  
          char=0
         _char=0                                                   
     ENDIF
+    if char = "*" then
+         char="0" 
+         GOSUB HOME 
+         c=0
+         _char=0
+         pos=0    
+    endif
     if c=1 then
          IF CHAR<>0 THEN  
             IF auxchar=char then                      
@@ -156,7 +192,8 @@ _TEXT:
                  endif                                         
             endif 
              auxchar=char                      
-        ENDIF                
+        ENDIF 
+                       
          CHAR=0
          IF P<39 THEN
              IF C_CHAR=10 AND P>13 THEN LCDOUT $FE,$18                        
@@ -168,7 +205,7 @@ _TEXT:
                     c_char=100
                     b=0       
                     c=0  
-                     lcdout $FE,128+p," "                                
+                    lcdout $FE,128+p," "                                
              endif                      
          ELSEIF P<64 THEN
              IF P=39 THEN  LCDOUT $FE,2                         
@@ -193,7 +230,7 @@ _TEXT:
     endif     
 RETURN
 
-_MENU:  ' MENU PRINCIPAL 
+_MENU:  ' MEIN MENU
     LCDOUT $FE,128
      LCDOUT "1.SHOW"
      LCDOUT $FE,192
@@ -207,6 +244,16 @@ _MENU:  ' MENU PRINCIPAL
             SMS=1
             char=0            
          LCDOUT $FE,1   
+     ENDIF
+     if CHAR="2" THEN   
+            EDIT=1
+            MENU=0            
+            p=0
+            char=0
+            c=0
+            Q=1
+            POS=0
+             LCDOUT $FE,1
      ENDIF
      IF CHAR="3" THEN                   
             MENU=0
@@ -228,7 +275,7 @@ _MENU:  ' MENU PRINCIPAL
      endif          
 RETURN
 
-HOME:
+HOME:                 'RESET ALL DATA, AND RETURN TO HOME
      IF CHAR = "0" THEN                     
             MENU=1
             sms =0
@@ -236,11 +283,13 @@ HOME:
             delete=0
             char=0
             auxsms=0   
-            add=0       
+            add=0  
+            EDIT=0     
             LCDOUT $FE,1
+            LCDOUT $FE,$0C
      ENDIF 
 RETURN
-_FIRST_EMTY:'RETORNA EN EPOS     
+_FIRST_EMTY:'RETURN IN EPOS THE FIRST NULL POSITION 
     FOR I=0 TO 5 STEP 2
         EpOS=255      
         IF D_E[I]=0 THEN
@@ -249,9 +298,9 @@ _FIRST_EMTY:'RETORNA EN EPOS
         endif
     NEXT I
 RETURN
-_LAST:    'DEBUELBE IN J EL NUMERO DE NODOS
+_LAST:    'RETURN IN J, THE NODE NUMBRE.
     J=0
-    FOR I=0 TO 5 STEP 2
+    FOR I=0 TO 5 STEP 2                                                                               
         IF D_E[I]=1 THEN
             LCDOUT $FE,l_sms[j] 
             LCDOUT dec j+1,"->SMS",dec i/2+1
@@ -259,35 +308,35 @@ _LAST:    'DEBUELBE IN J EL NUMERO DE NODOS
         endif
     NEXT I
 RETURN
- _MS_M:
-            IF POS <>0 THEN 
-            IF auxsms=0 THEN LCDOUT $FE,1                       
-                SELECT CASE char                
-                  CASE "6" 
-                        LCDOUT $FE,$18 
-                        char=0
-                  CASE "5" 
-                        LCDOUT $FE,$2
-                        char=0
-                  CASE "4" 
-                        LCDOUT $FE,$1C
-                        char=0  
-                END SELECT            
-            GOSUB _SMS 
-            if char="*" then 
-                   LCDOUT $FE,1                                                                                     
-                   POS=0                                              
-                   auxsms=0
-                   char=0 
-            endif
+ _MS_M:  'MOVE FUNTIONS ON SCREEN
+         IF POS <>0 THEN 
+                IF auxsms=0 THEN LCDOUT $FE,1                       
+                    SELECT CASE char                
+                      CASE "6" 
+                            LCDOUT $FE,$18 
+                            char=0
+                      CASE "5" 
+                            LCDOUT $FE,$2
+                            char=0
+                      CASE "4" 
+                            LCDOUT $FE,$1C
+                            char=0  
+                    END SELECT            
+                GOSUB _SMS 
+                if char="*" then 
+                       LCDOUT $FE,1                                                                                     
+                       POS=0                                              
+                       auxsms=0
+                       char=0 
+                endif
             
         ELSE                                                       
             GOSUB _SHOW
         ENDIF
 RETURN
-_SMS:  ''MUESTRA MENSAJE SELECCIONADO, VARIABLE [POS]
+_SMS:  'SHOW SELECTED SMS, VARIABLE [POS]
     if auxsms=0 then     
-         GOSUB _POS_N
+         GOSUB _POS_N        
         FOR J=0 TO 63
             READ d_e[i-1]+J,CHAR                     
             IF CHAR<>35 THEN 
@@ -303,26 +352,24 @@ _SMS:  ''MUESTRA MENSAJE SELECCIONADO, VARIABLE [POS]
     GOSUB HOME           
 RETURN
 
-_SHOW: 'LISTA LOS MENSAJES EN MEMORIA Y DEVUELBE [POS] 
+_SHOW: ' LIST THE SMS AND RETURN SELECTION IN POS  
      GOSUB _LAST
      if char="1" and j>0 then
         pos=1 
-     endif
+     endif                                              
      if char="2" and j>1 then
-        pos=2                 
-     endif
+        pos=2                                      
+     endif       
      if char="3" and j>2 then
         pos=3        
-     endif
+     endif       
      if char="4" and j>3 then
         pos=4                       
-     endif
-       GOSUB HOME             
-     char=0
-RETURN
-
-
-_POS_N:
+     endif       
+     GOSUB HOME             
+     char=0      
+RETURN          
+_POS_N:'RETURN I, THIS IS THE OBJE... POSITION
     i=0
     j=0    
     WHILE J<>POS
@@ -332,28 +379,21 @@ _POS_N:
        i=i+2 
     WEND     
 RETURN
-_DELETE:
+
+_DELETE:   'ACTIVE EMTY SPACE IN EEPROM 
     POS=(POS-1)*2
     d_e[POS]=0
     pos=0
 RETURN
-_SAVE_EP:      
-        write 250,d_e[0]
-        write 251,d_e[1]
-        write 252,d_e[2]
-        write 253,d_e[3]
-        write 254,d_e[4]
-        write 255,d_e[5]
+_SAVE_EP:  'SAVE THE VECTOR OF POSITIONS.     
+    write 250,d_e[0]
+    write 251,d_e[1]
+    write 252,d_e[2]
+    write 253,d_e[3]
+    write 254,d_e[4]
+    write 255,d_e[5]
 RETURN
 
-'TECLADO:    
-'    LCDOUT $FE,128+Pos      
-'    if char<>255 then 
-'        LCDOUT char      
-'        pos=pos+1
-'        char=255        
-'    endif
-'RETURN 
 
 DISABLE 
 INTERRUPTION:
